@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import torch.nn as nn
 import math
 
@@ -37,15 +38,14 @@ class EnsembleLocallyConnected(nn.Module):
             nn.init.uniform_(self.bias, -bound, bound)
 
     def forward(self, input: torch.Tensor):
-        print(input.shape)
+        # input_numpy: sample-size * node-num * input-features
+        # weight: ensemble-size * node-num * input-feature * output-features
+        input = input.unsqueeze(dim=1)
+        input = input.repeat(1, self.ensemble_size, 1, 1)
+        out = torch.einsum("abcd,bcde->abce", input, self.weight)
 
-        # [n, d, 1, m2] = [n, d, 1, m1] @ [1, d, m1, m2]
-        # input.unsqueeze(dim=2) size: [n, d, 1, m1]
-        # weight.unsqueeze(dim=0) size: [1, d, m1, m2]
-        out = torch.matmul(input.unsqueeze(dim=2), self.weight.unsqueeze(dim=0))
-        out = out.squeeze(dim=2)
         if self.bias is not None:
-            # [n, d, m2] += [d, m2]
+            # [n, e, d, m2] += [e, d, m2]
             out += self.bias
         return out
 
@@ -57,6 +57,16 @@ class EnsembleLocallyConnected(nn.Module):
             self.bias is not None
         )
 
+def calculate_output(input_numpy, weight, ensemble_size):
+    # input_numpy: sample-size * node-num * input-features
+    # weight: ensemble-size * node-num * input-feature * output-features
+    input_numpy = np.expand_dims(input_numpy, axis=1)
+    input_numpy = np.tile(input_numpy, [1, ensemble_size, 1, 1])
+
+    # output_numpy: ensemble-size * node-num * output-features
+    output_numpy = np.einsum("abcd,bcde->abce", input_numpy, weight)
+    return output_numpy
+
 
 def main():
     # n：随机sample的样本数
@@ -64,18 +74,13 @@ def main():
     # m1：input features
     # m2: output features
     # 不考虑d的话，这就是一个标准的mlp
-    n, d, m1, m2 = 200, 3, 5, 7
+    n, d, m1, m2 = 200, 3, 128, 256
 
     ensemble_size = 7
 
-    # numpy
-    import numpy as np
     input_numpy = np.random.randn(n, d, m1)
-    weight = np.random.randn(d, m1, m2)
-    output_numpy = np.zeros([n, d, m2])
-    for j in range(d):
-        # [n, m2] = [n, m1] @ [m1, m2]
-        output_numpy[:, j, :] = input_numpy[:, j, :] @ weight[j, :, :]
+    weight = np.random.randn(ensemble_size, d, m1, m2)
+    output_numpy = calculate_output(input_numpy.copy(), weight.copy(), ensemble_size)
 
     # torch
     torch.set_default_dtype(torch.double)

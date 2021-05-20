@@ -50,7 +50,7 @@ class LocallyConnected(nn.Module):
             nn.init.uniform_(self.bias, -bound, bound)
 
     def forward(self, input: torch.Tensor):
-        # [n, d, m2] = [n, d, m1] @ [d, m1, m2]
+        # [n, d, m2] = [n, d, m1] * [d, m1, m2]
         out = torch.einsum("abc,bcd->abd", input, self.weight)
         if self.bias is not None:
             # [n, d, m2] += [d, m2]
