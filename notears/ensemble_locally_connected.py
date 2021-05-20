@@ -3,36 +3,23 @@ import torch.nn as nn
 import math
 
 
-class LocallyConnected(nn.Module):
-    """Local linear layer, i.e. Conv1dLocal() with filter size 1.
-
-    Args:
-        num_linear: num of local linear layers, i.e.
-        in_features: m1
-        out_features: m2
-        bias: whether to include bias or not
-
-    Shape:
-        - Input: [n, d, m1]
-        - Output: [n, d, m2]
-
-    Attributes:
-        weight: [d, m1, m2]
-        bias: [d, m2]
-    """
-
-    def __init__(self, num_linear, input_features, output_features, bias=True):
-        super(LocallyConnected, self).__init__()
+class EnsembleLocallyConnected(nn.Module):
+    def __init__(self, ensemble_size, num_linear, input_features, output_features, bias=True):
+        super(EnsembleLocallyConnected, self).__init__()
         # 这些linear是并行的
+        self.ensemble_size = ensemble_size
         self.num_linear = num_linear
         self.input_features = input_features
         self.output_features = output_features
 
-        self.weight = nn.Parameter(torch.Tensor(num_linear,
+        self.weight = nn.Parameter(torch.Tensor(ensemble_size,
+                                                num_linear,
                                                 input_features,
                                                 output_features))
         if bias:
-            self.bias = nn.Parameter(torch.Tensor(num_linear, output_features))
+            self.bias = nn.Parameter(torch.Tensor(ensemble_size,
+                                                  num_linear,
+                                                  output_features))
         else:
             # You should always register all possible parameters, but the
             # optional ones can be None if you want.
@@ -50,8 +37,13 @@ class LocallyConnected(nn.Module):
             nn.init.uniform_(self.bias, -bound, bound)
 
     def forward(self, input: torch.Tensor):
-        # [n, d, m2] = [n, d, m1] @ [d, m1, m2]
-        out = torch.einsum("abc,bcd->abd", input, self.weight)
+        print(input.shape)
+
+        # [n, d, 1, m2] = [n, d, 1, m1] @ [1, d, m1, m2]
+        # input.unsqueeze(dim=2) size: [n, d, 1, m1]
+        # weight.unsqueeze(dim=0) size: [1, d, m1, m2]
+        out = torch.matmul(input.unsqueeze(dim=2), self.weight.unsqueeze(dim=0))
+        out = out.squeeze(dim=2)
         if self.bias is not None:
             # [n, d, m2] += [d, m2]
             out += self.bias
@@ -60,8 +52,8 @@ class LocallyConnected(nn.Module):
     def extra_repr(self):
         # (Optional)Set the extra information about this module. You can test
         # it by printing an object of this class.
-        return 'num_linear={}, in_features={}, out_features={}, bias={}'.format(
-            self.num_linear, self.in_features, self.out_features,
+        return 'ensemble_size={}, num_linear={}, in_features={}, out_features={}, bias={}'.format(
+            self.ensemble_size, self.num_linear, self.in_features, self.out_features,
             self.bias is not None
         )
 
@@ -72,7 +64,9 @@ def main():
     # m1：input features
     # m2: output features
     # 不考虑d的话，这就是一个标准的mlp
-    n, d, m1, m2 = 2, 3, 5, 7
+    n, d, m1, m2 = 200, 3, 5, 7
+
+    ensemble_size = 7
 
     # numpy
     import numpy as np
@@ -86,7 +80,7 @@ def main():
     # torch
     torch.set_default_dtype(torch.double)
     input_torch = torch.from_numpy(input_numpy)
-    locally_connected = LocallyConnected(d, m1, m2, bias=False)
+    locally_connected = EnsembleLocallyConnected(ensemble_size, d, m1, m2, bias=False)
     locally_connected.weight.data[:] = torch.from_numpy(weight)
     output_torch = locally_connected(input_torch)
 

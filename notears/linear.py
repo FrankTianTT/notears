@@ -63,6 +63,8 @@ def notears_linear(X, lambda1, loss_type, max_iter=100, h_tol=1e-8, rho_max=1e+1
         return obj, g_obj
 
     n, d = X.shape
+    # w_est的size是2 * d，d维正参数，d维负参数
+    # 两个weight的bound是：当i==j时只能为0，其余情况非负
     w_est, rho, alpha, h = np.zeros(2 * d * d), 1.0, 0.0, np.inf  # double w_est into (w_pos, w_neg)
     bnds = [(0, 0) if i == j else (0, None) for _ in range(2) for i in range(d) for j in range(d)]
     if loss_type == 'l2':

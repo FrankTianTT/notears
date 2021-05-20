@@ -17,6 +17,8 @@ class NotearsMLP(nn.Module):
         # fc1: variable splitting for l1
         self.fc1_pos = nn.Linear(d, d * dims[1], bias=bias)
         self.fc1_neg = nn.Linear(d, d * dims[1], bias=bias)
+        # bound是对于fc1而言的，对于i==j，要求weight只能为0
+        # 对于其他的参数，要求weight至少0，因此有两个weight，分别代表正和负
         self.fc1_pos.weight.bounds = self._bounds()
         self.fc1_neg.weight.bounds = self._bounds()
         # fc2: local linear layers
