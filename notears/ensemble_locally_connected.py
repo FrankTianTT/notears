@@ -4,8 +4,46 @@ import torch.nn as nn
 import math
 
 
+class EnsembleLayer(nn.Module):
+    def __init__(self, input_features, output_features, ensemble_size=7, bias=True):
+        super(EnsembleLayer, self).__init__()
+        self.ensemble_size = ensemble_size
+        self.input_features = input_features
+        self.output_features = output_features
+
+        self.weight = nn.Parameter(torch.Tensor(ensemble_size,
+                                                input_features,
+                                                output_features))
+        if bias:
+            self.bias = nn.Parameter(torch.Tensor(ensemble_size, output_features))
+        else:
+            # You should always register all possible parameters, but the
+            # optional ones can be None if you want.
+            self.register_parameter('bias', None)
+
+        self.reset_parameters()
+
+    @torch.no_grad()
+    def reset_parameters(self):
+        # 初始化权重
+        k = 1.0 / self.input_features
+        bound = math.sqrt(k)
+        nn.init.uniform_(self.weight, -bound, bound)
+        if self.bias is not None:
+            nn.init.uniform_(self.bias, -bound, bound)
+
+    def forward(self, input: torch.Tensor):
+        # input-size: batch-size * ensemble-size * input-dim
+        # weight: ensemble-size * input-dim * output-dim
+        out = torch.einsum("abc,bcd->abd", input, self.weight)
+        if self.bias is not None:
+            out += self.bias
+
+        return out
+
+
 class EnsembleLocallyConnected(nn.Module):
-    def __init__(self, ensemble_size, num_linear, input_features, output_features, bias=True):
+    def __init__(self, num_linear, input_features, output_features, ensemble_size=7, bias=True):
         super(EnsembleLocallyConnected, self).__init__()
         # 这些linear是并行的
         self.ensemble_size = ensemble_size
