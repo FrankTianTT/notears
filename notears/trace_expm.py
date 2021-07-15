@@ -1,15 +1,17 @@
 import torch
-import numpy as np
-import scipy.linalg as slin
 
 
 class TraceExpm(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input):
         # detach so we can cast to NumPy
-        E = slin.expm(input.detach().numpy())
-        f = np.trace(E)
-        E = torch.from_numpy(E)
+        # E = slin.expm(input.detach().numpy())
+        # f = np.trace(E)
+        # E = torch.from_numpy(E)
+
+        E = torch.matrix_exp(input.detach())
+        f = torch.trace(E)
+
         ctx.save_for_backward(E)
         return torch.as_tensor(f, dtype=input.dtype)
 

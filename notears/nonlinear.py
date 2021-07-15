@@ -165,11 +165,11 @@ def squared_loss(output, target):
     return loss
 
 
-def dual_ascent_step(model, X, lambda1, lambda2, rho, alpha, h, rho_max):
+def dual_ascent_step(model, X, lambda1, lambda2, rho, alpha, h, rho_max, device="cpu"):
     """Perform one step of dual ascent in augmented Lagrangian."""
     h_new = None
-    optimizer = LBFGSBScipy(model.parameters())
-    X_torch = torch.from_numpy(X)
+    optimizer = LBFGSBScipy(model.parameters(), device)
+    X_torch = torch.from_numpy(X).to(device)
     while rho < rho_max:
         def closure():
             optimizer.zero_grad()
@@ -200,11 +200,12 @@ def notears_nonlinear(model: nn.Module,
                       max_iter: int = 100,
                       h_tol: float = 1e-8,
                       rho_max: float = 1e+16,
-                      w_threshold: float = 0.3):
+                      w_threshold: float = 0.3,
+                      device="cpu"):
     rho, alpha, h = 1.0, 0.0, np.inf
     for _ in range(max_iter):
         rho, alpha, h = dual_ascent_step(model, X, lambda1, lambda2,
-                                         rho, alpha, h, rho_max)
+                                         rho, alpha, h, rho_max, device)
         if h <= h_tol or rho >= rho_max:
             break
     W_est = model.fc1_to_adj()
@@ -227,7 +228,7 @@ def main():
     np.savetxt('X.csv', X, delimiter=',')
 
     model = NotearsMLP(dims=[d, 10, 1], bias=True)
-    W_est = notears_nonlinear(model, X, lambda1=0.01, lambda2=0.01)
+    W_est = notears_nonlinear(model, X, lambda1=0.01, lambda2=0.01, device="cuda")
     assert ut.is_dag(W_est)
     np.savetxt('W_est.csv', W_est, delimiter=',')
     acc = ut.count_accuracy(B_true, W_est != 0)
